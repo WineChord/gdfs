@@ -146,7 +146,10 @@ func (n *NameNode) HeartBeat(args *HeartBeatArgs, reply *HeartBeatReply) error {
 	reply.RepBlkToNodes = make(map[string]string)
 	reply.RmBlk = make([]string, 0)
 	reply.ReRegister = false
-	reply.ReqBlkReport = false
+	// RequestBlk will be set after each data transfer
+	n.mu.Lock()
+	reply.ReqBlkReport = n.RequestBlk
+	n.mu.Unlock()
 	return nil
 }
 

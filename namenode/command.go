@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/WineChord/gdfs/config"
 	"github.com/WineChord/gdfs/utils"
@@ -176,7 +177,6 @@ func (n *NameNode) runCopyToLocal(args *CommandArgs, reply *CommandReply) error 
 }
 
 func (n *NameNode) runLs(args *CommandArgs, reply *CommandReply) error {
-	//
 	log.Printf("inside runLs\n")
 	reply.Result = "running ls"
 	path := n.makePath(args.DPath)
@@ -256,4 +256,33 @@ func (n *NameNode) runFormat(args *CommandArgs, reply *CommandReply) error {
 
 func (n *NameNode) makePath(path string) string {
 	return filepath.Join(n.DFSRootPath, path)
+}
+
+// NotifyArgs for client to notify namenode
+type NotifyArgs struct {
+	// empty
+}
+
+// NotifyReply reply status
+type NotifyReply struct {
+	Status bool
+}
+
+func (n *NameNode) notify() {
+	n.mu.Lock()
+	n.RequestBlk = true
+	n.mu.Unlock()
+
+	time.Sleep(time.Second * time.Duration(config.HeartBeatInSec))
+
+	n.mu.Lock()
+	n.RequestBlk = false
+	n.mu.Unlock()
+}
+
+// Notify is called by client
+func (n *NameNode) Notify(args *NotifyArgs, reply *NotifyReply) error {
+	go n.notify()
+	reply.Status = true
+	return nil
 }

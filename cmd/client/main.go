@@ -131,6 +131,27 @@ func runCopyFromLocal() {
 			}
 		}
 	}
+	// when namenode did the segment naming, it only records file -> segName map
+	// but didn't update segName -> [nodes] map, this is because it is possible
+	// that the data tranfer happened between client and datanode is broken.
+	// Therefore, it is more appropriate to notify namenode after successful
+	// transmission of data. notify here in namenode is a simple urgent request
+	// for block report to each datanodes.
+	notifyNameNode()
+}
+
+func notifyNameNode() {
+	log.Printf("notify namenode\n")
+	args := namenode.NotifyArgs{}
+	reply := namenode.NotifyReply{}
+	c, err := rpc.DialHTTP("tcp", config.NameNodeAddress)
+	if err != nil {
+		log.Fatal("dialing: ", err)
+	}
+	err = c.Call("NameNode.Notify", &args, &reply)
+	if err != nil {
+		log.Fatal("Calling: ", err)
+	}
 }
 
 func runCopyToLocal() {

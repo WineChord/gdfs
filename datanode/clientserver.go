@@ -76,7 +76,9 @@ func (d *DataNode) saveMeta(blkID, timestamp string, checksum uint32, length int
 	}
 	meta.Checksum = checksum
 	meta.Length = int64(length)
+	d.mu.Lock()
 	d.IDToMetaData[blkID] = meta
+	d.mu.Unlock()
 	file, err := os.Create(filepath.Join(d.MetaPath, blkID))
 	if err != nil {
 		log.Printf("error when creating metadata file: %v\n", err)

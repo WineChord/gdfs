@@ -24,6 +24,7 @@ import (
 	"net/rpc"
 	"os"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -80,6 +81,7 @@ type DataNode struct {
 	 */
 	// IDList       []string
 	IDToMetaData map[string]utils.MetaData
+	mu           sync.Mutex
 }
 
 // NewDataNode retrieve NamespaceID and StorageID on disk
@@ -331,6 +333,9 @@ func (d *DataNode) sendHeartBeat() {
 		"len(RepBlk): %v, len(RmBlk): %v, ReRegister: %v, ShutDown: %v"+
 		"ReqBlkRep: %v\n", len(reply.RepBlkToNodes), len(reply.RmBlk),
 		reply.ReRegister, reply.Shutdown, reply.ReqBlkReport)
+	if reply.ReqBlkReport {
+		go d.reportBlock()
+	}
 }
 
 func (d *DataNode) reportBlock() {

@@ -22,6 +22,7 @@ import (
 	"net/rpc"
 	"os"
 	"strconv"
+	"sync"
 
 	"github.com/WineChord/gdfs/config"
 	"github.com/WineChord/gdfs/utils"
@@ -41,7 +42,9 @@ type NameNode struct {
 	// map storage id to address(ip:port)
 	SID2Addr map[string]string
 	// map address to storage id
-	Addr2SID map[string]string
+	Addr2SID   map[string]string
+	RequestBlk bool
+	mu         sync.Mutex
 }
 
 // NewNameNode initializes a namenode
@@ -57,6 +60,7 @@ func NewNameNode() *NameNode {
 func (n *NameNode) init() {
 	log.Printf("namenode starts to initialize\n")
 	n.DFSRootPath = config.DFSRootPath
+	n.RequestBlk = false
 	ex, err := utils.Exists(n.DFSRootPath)
 	if err != nil {
 		log.Printf("error with dfs root path: %v\n", err)
