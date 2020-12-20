@@ -23,6 +23,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/WineChord/gdfs/config"
 	"github.com/WineChord/gdfs/utils"
@@ -44,6 +45,7 @@ type NameNode struct {
 	// map address to storage id
 	Addr2SID   map[string]string
 	RequestBlk bool
+	Format     bool
 	mu         sync.Mutex
 }
 
@@ -150,20 +152,32 @@ func (n *NameNode) dumpNID() {
 
 func (n *NameNode) format() {
 	log.Printf("start formatting\n")
-	os.RemoveAll(n.DFSRootPath)
+	os.RemoveAll(n.DFSRootPath) // meta/gdfs
 	os.MkdirAll(n.DFSRootPath, 0700)
+	// erase in memory blk -> datanodes map
+	n.BlkToDatanodes = make(map[string][]string)
 	// namespace id should change when formatted
 	// and it should be persistent to disk
 	n.NamespaceID++
-	f, err := os.Open(config.NNamespaceIDPath)
-	defer f.Close()
-	if err != nil {
-		log.Fatalf("error when opening nid for namenode: %v\n", err)
-	}
-	w := bufio.NewWriter(f)
-	w.WriteString(strconv.Itoa(n.NamespaceID))
-	w.Flush()
+	n.dumpNID()
 	log.Printf("NamespaceID changes to %v after formatting\n", n.NamespaceID)
+	n.setFormat()
+}
+
+func (n *NameNode) setFormat() {
+	log.Printf("set format\n")
+	n.mu.Lock()
+	n.Format = true
+	n.mu.Unlock()
+
+	// eps := time.Duration(config.HeartBeatInSec * 4 / 5)
+	eps := time.Duration(50)
+	time.Sleep(time.Second*time.Duration(config.HeartBeatInSec) + eps)
+
+	n.mu.Lock()
+	n.Format = false
+	n.mu.Unlock()
+	log.Printf("unset format\n")
 }
 
 // Run starts a RPC server

@@ -127,6 +127,10 @@ type HeartBeatReply struct {
 	Shutdown bool
 	// request immediate block report
 	ReqBlkReport bool
+	// namenode request datanode to format
+	Format bool
+	// namenode's namespace id
+	FormatID int
 }
 
 // HeartBeat serves heartbeat message from datanode
@@ -149,6 +153,8 @@ func (n *NameNode) HeartBeat(args *HeartBeatArgs, reply *HeartBeatReply) error {
 	// RequestBlk will be set after each data transfer
 	n.mu.Lock()
 	reply.ReqBlkReport = n.RequestBlk
+	reply.Format = n.Format
+	reply.FormatID = n.NamespaceID
 	n.mu.Unlock()
 	return nil
 }

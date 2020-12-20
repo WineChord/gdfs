@@ -96,7 +96,6 @@ func (d *DataNode) init() {
 	log.Printf("start initializing datanode...\n")
 	gob.Register(utils.MetaData{})
 	d.DataPath = config.DataPath
-	d.IDToMetaData = make(map[string]utils.MetaData)
 	ex, err := utils.Exists(d.DataPath)
 	if err != nil {
 		log.Printf("error with data node path: %v\n", err)
@@ -119,6 +118,7 @@ func (d *DataNode) init() {
 }
 
 func (d *DataNode) constructInfo() {
+	d.IDToMetaData = make(map[string]utils.MetaData)
 	d.MetaPath = config.IDToMetaDataPath
 	d.ActPath = config.ActualDataPath
 	ex, err := utils.Exists(d.MetaPath)
@@ -330,12 +330,35 @@ func (d *DataNode) sendHeartBeat() {
 		log.Fatal("Calling: ", err)
 	}
 	log.Printf("heartbeat reply from namenode:\n"+
-		"len(RepBlk): %v, len(RmBlk): %v, ReRegister: %v, ShutDown: %v"+
-		"ReqBlkRep: %v\n", len(reply.RepBlkToNodes), len(reply.RmBlk),
-		reply.ReRegister, reply.Shutdown, reply.ReqBlkReport)
-	if reply.ReqBlkReport {
-		go d.reportBlock()
+		"\tlen(RepBlk): %v, len(RmBlk): %v, ReRegister: %v, ShutDown: %v"+
+		"ReqBlkRep: %v, Format: %v\n", len(reply.RepBlkToNodes), len(reply.RmBlk),
+		reply.ReRegister, reply.Shutdown, reply.ReqBlkReport, reply.Format)
+	if reply.Format {
+		d.format(reply.FormatID)
 	}
+	if reply.ReqBlkReport {
+		d.reportBlock()
+	}
+}
+
+func (d *DataNode) format(formatID int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	log.Printf("start format datanode\n")
+	d.NamespaceID = formatID
+	d.dumpNID()
+	err := os.RemoveAll(d.ActPath)
+	if err != nil {
+		log.Printf("error when removing actual data path\n")
+	}
+	err = os.RemoveAll(d.MetaPath)
+	if err != nil {
+		log.Printf("error when removing meta data path\n")
+	}
+	// inside constrcutInfo, the in memory data structure will
+	// be cleared
+	d.constructInfo()
+	// d.reportBlock()
 }
 
 func (d *DataNode) reportBlock() {
