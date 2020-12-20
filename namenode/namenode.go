@@ -36,21 +36,30 @@ type NameNode struct {
 	BlkToDatanodes map[string][]string
 	diskSpaceQuote float32
 	NamespaceID    int
+	// map storage id to address(ip:port)
+	SID2Addr map[string]string
+	// map address to storage id
+	Addr2SID map[string]string
 }
 
 // NewNameNode initializes a namenode
 func NewNameNode() *NameNode {
 	n := &NameNode{}
+	n.BlkToDatanodes = make(map[string][]string)
+	n.SID2Addr = make(map[string]string)
+	n.Addr2SID = make(map[string]string)
 	n.init()
 	return n
 }
 
 func (n *NameNode) init() {
+	log.Printf("namenode starts to initialize\n")
 	n.DFSRootPath = config.DFSRootPath
 	ex, err := utils.Exists(n.DFSRootPath)
 	if err != nil {
 		log.Printf("error with dfs root path: %v\n", err)
 	}
+	log.Printf("set dfs root path as %v\n", n.DFSRootPath)
 	if !ex {
 		log.Printf("auto format dfs on start\n")
 		os.MkdirAll(n.DFSRootPath, 0700)
@@ -60,8 +69,12 @@ func (n *NameNode) init() {
 		log.Printf("error with namenode nid file: %v\n", err)
 	}
 	if ex {
+		log.Printf("namenode NamespaceID file %v exists, starts reading\n",
+			config.NNamespaceIDPath)
 		n.readNID()
 	} else {
+		log.Printf("namenode NamespaceID file %v doesn't exist, starts creating\n",
+			config.NNamespaceIDPath)
 		n.initNID()
 	}
 }
@@ -70,20 +83,22 @@ func (n *NameNode) readNID() {
 	f, err := os.Open(config.NNamespaceIDPath)
 	defer f.Close()
 	if err != nil {
-		log.Fatal("error when opening nid for namenode: %v\n", err)
+		log.Fatalf("error when opening nid for namenode: %v\n", err)
 	}
 	s := bufio.NewScanner(f)
 	if s.Scan() { // file not empty, read nid directly
 		n.NamespaceID, err = strconv.Atoi(s.Text())
 		if err != nil { // file content not int
-			log.Printf("error when reading from nid file")
+			log.Printf("error when reading from nid file, dump new nid\n")
 			n.NamespaceID = 1
 			n.dumpNID()
 		}
 	} else { // file empty, dump directly
+		log.Printf("nid file is empty, dump new nid\n")
 		n.NamespaceID = 1
 		n.dumpNID()
 	}
+	log.Printf("readNID reads %v\n", n.NamespaceID)
 }
 
 func (n *NameNode) initNID() {
@@ -94,20 +109,41 @@ func (n *NameNode) initNID() {
 	}
 	w := bufio.NewWriter(f)
 	n.NamespaceID = 1 // initialize namespace id to 1
-	w.WriteString(strconv.Itoa(n.NamespaceID))
+	var cnt int
+	cnt, err = w.WriteString(strconv.Itoa(n.NamespaceID))
+	log.Printf("%v bytes written to nid file\n", cnt)
+	if err != nil {
+		log.Printf("error when writing nid to file: %v\n", err)
+	}
+	err = w.Flush()
+	if err != nil {
+		log.Printf("error when flush nid to disk: %v\n", err)
+	}
+	log.Printf("initNID init nid %v\n", n.NamespaceID)
 }
 
 func (n *NameNode) dumpNID() {
-	f, err := os.Open(config.NNamespaceIDPath)
+	log.Printf("insed dumpNID: dump nid %v to %v\n", n.NamespaceID, config.NNamespaceIDPath)
+	f, err := os.OpenFile(config.NNamespaceIDPath, os.O_RDWR, 0700)
 	defer f.Close()
 	if err != nil {
 		log.Fatalf("error when creating nid for namenode: %v\n", err)
 	}
 	w := bufio.NewWriter(f)
-	w.WriteString(strconv.Itoa(n.NamespaceID))
+	var cnt int
+	cnt, err = w.WriteString(strconv.Itoa(n.NamespaceID))
+	log.Printf("%v bytes dump to nid file\n", cnt)
+	if err != nil {
+		log.Printf("error when writing nid file: %v\n", err)
+	}
+	err = w.Flush()
+	if err != nil {
+		log.Printf("error when flushing nid to disk: %v\n", err)
+	}
 }
 
 func (n *NameNode) format() {
+	log.Printf("start formatting\n")
 	os.RemoveAll(n.DFSRootPath)
 	os.MkdirAll(n.DFSRootPath, 0700)
 	// namespace id should change when formatted
@@ -120,6 +156,7 @@ func (n *NameNode) format() {
 	}
 	w := bufio.NewWriter(f)
 	w.WriteString(strconv.Itoa(n.NamespaceID))
+	log.Printf("NamespaceID changes to %v after formatting\n", n.NamespaceID)
 }
 
 // Run starts a RPC server

@@ -14,7 +14,10 @@
 
 package utils
 
-import "os"
+import (
+	"os"
+	"time"
+)
 
 // Exists checks whether a path exist
 func Exists(path string) (bool, error) {
@@ -26,4 +29,9 @@ func Exists(path string) (bool, error) {
 		return false, nil // file or dir not exists
 	}
 	return false, err // other error (exclude not exists)
+}
+
+// GetCurrentTimeInMs return unix time in ms
+func GetCurrentTimeInMs() int64 {
+	return time.Now().UnixNano() / int64(time.Millisecond)
 }

@@ -44,6 +44,8 @@ var (
 	ReplicationFactor = 3
 	// BlkSize in byte
 	BlkSize = 4096
+	// HeartBeatInSec is the frequency of datanode notifies namenode
+	HeartBeatInSec = 3
 )
 
 const (
