@@ -180,7 +180,7 @@ func (n *NameNode) runCopyToLocal(args *CommandArgs, reply *CommandReply) error 
 	reply.BlkList = n.readDfsFile(dfsPath)
 	reply.BlkToDataNodes = make(map[string][]string)
 	for _, blk := range reply.BlkList {
-		reply.BlkToDataNodes[blk] = make([]string, len(n.BlkToDatanodes[blk]))
+		reply.BlkToDataNodes[blk] = make([]string, 0)
 		for _, sid := range n.BlkToDatanodes[blk] {
 			reply.BlkToDataNodes[blk] = append(reply.BlkToDataNodes[blk], n.SID2Addr[sid])
 		}

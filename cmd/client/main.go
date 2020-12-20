@@ -169,7 +169,7 @@ func runCopyToLocal() {
 	 * we request each segment on the list of datanodee and append
 	 * each segment to local disk.
 	 * */
-	dfsPath := os.Args[2]
+	dfsPath, localFilePath := os.Args[2], os.Args[3]
 	args := namenode.CommandArgs{}
 	args.CommandType = config.CopyToLocal
 	args.DPath = dfsPath // '/'
@@ -182,6 +182,78 @@ func runCopyToLocal() {
 	log.Printf("retrieve dfs file segments and datanodes:\n")
 	for _, seg := range reply.BlkList {
 		log.Printf("%v: %v\n", seg, reply.BlkToDataNodes[seg])
+	}
+	/** Now we've got two things from reply:
+	 * 1. blk list for a dfs file
+	 * 2. datanodes list for each block
+	 * now we need to perform the following operations:
+	 * For each block:
+	 * 	1. select a datanode from list
+	 *  2. request data segment from that datanode
+	 *  3. will receive: data, timestamp, checksum
+	 * 	   then calculate the checksum of the data to compare
+	 *     with the received checksum
+	 *  4. if checksum do not match, or the datanode takes too
+	 *     long time to respond, request another datanode
+	 *  5. when we've got intact segment, append it to local file
+	 * */
+	file, err := os.Create(localFilePath)
+	if err != nil {
+		log.Printf("error when creating local file: %v\n", err)
+	}
+	log.Printf("start request segments\n")
+	for _, seg := range reply.BlkList {
+		log.Printf("reply.BlkToDataNodes[seg]: %v\n", reply.BlkToDataNodes[seg])
+		log.Printf("len: %v\n", len(reply.BlkToDataNodes[seg]))
+		for _, addr := range reply.BlkToDataNodes[seg] {
+			if addr == "" {
+				continue
+			}
+			log.Printf("addr: %v\n", addr)
+			data, length, ok := readRemoteBlk(seg, addr)
+			if ok { // ok means the data is intact
+				writeLocalFile(file, data, length)
+			}
+		}
+	}
+	file.Sync()
+	file.Close()
+	log.Printf("write to local file done\n")
+}
+
+func readRemoteBlk(seg, addr string) ([]byte, int, bool) {
+	/** we need to request block from addr (a datanode)
+	 * the argument is segment name
+	 * the reply is BlkData
+	 * */
+	log.Printf("request block %v from datanode %v\n", seg, addr)
+	args := datanode.RequestBlkArgs{}
+	args.BlkID = seg
+	reply := utils.BlkData{}
+	c, err := rpc.DialHTTP("tcp", addr)
+	log.Printf("request %v from %v\n", seg, addr)
+	if err != nil {
+		log.Fatal("dialing: ", err)
+	}
+	err = c.Call("DataNode.RequestBlk", &args, &reply)
+	if err != nil {
+		log.Fatal("Calling: ", err)
+	}
+	checksum := crc32.ChecksumIEEE(reply.Data)
+	// if checksum mismatch, corrupted!
+	if checksum != reply.Checksum {
+		log.Printf("data is corrupted for %v from %v!\n", seg, addr)
+		return []byte{}, 0, false
+	}
+	log.Printf("data is ok for %v from %v\n", seg, addr)
+	return reply.Data, reply.Length, true
+}
+
+func writeLocalFile(file *os.File, data []byte, length int) {
+	// write bytes to local file
+	_, err := file.Write(data[:length])
+	if err != nil {
+		log.Printf("error writing to local file: %v\n", err)
 	}
 }
 

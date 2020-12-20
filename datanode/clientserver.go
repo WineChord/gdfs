@@ -16,6 +16,8 @@ package datanode
 
 import (
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -27,6 +29,46 @@ import (
 
 	"github.com/WineChord/gdfs/utils"
 )
+
+// RequestBlkArgs is used by client to request a block
+type RequestBlkArgs struct {
+	BlkID string
+}
+
+// RequestBlk will read two files on disk to construct meta data and actual
+// perspectively
+func (d *DataNode) RequestBlk(args *RequestBlkArgs, reply *utils.BlkData) error {
+	blkID := args.BlkID
+	log.Printf("process block request for %v\n", blkID)
+	_, checksum, length := d.readMeta(blkID)
+	data := d.readData(blkID)
+	reply.BlkID = blkID
+	reply.Checksum = checksum
+	reply.Length = length
+	reply.Data = data
+	return nil
+}
+
+func (d *DataNode) readData(blkID string) []byte {
+	log.Printf("read actual data from file for %v\n", blkID)
+	file, err := os.Open(filepath.Join(d.ActPath, blkID))
+	if err != nil {
+		log.Printf("error when opening actual data file: %v\n", err)
+	}
+	data, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.Printf("error reading actual data file: %v\n", err)
+	}
+	return data
+}
+
+func (d *DataNode) readMeta(blkID string) (timestamp string, checksum uint32, length int) {
+	meta := d.IDToMetaData[blkID]
+	timestamp = fmt.Sprintf("%v", meta.Timestamp)
+	checksum = meta.Checksum
+	length = int(meta.Length)
+	return
+}
 
 // SendBlkReply contains status, the argument is BlkData
 type SendBlkReply struct {

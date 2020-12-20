@@ -180,9 +180,20 @@ func (n *NameNode) ReportBlock(args *ReportBlockArgs, reply *ReportBlockReply) e
 		if n.BlkToDatanodes[id] == nil {
 			n.BlkToDatanodes[id] = make([]string, 0)
 		}
-		// BlkToDatanodes maps block id to storage id
-		n.BlkToDatanodes[id] = append(n.BlkToDatanodes[id], n.Addr2SID[args.Addr])
+		if contains(n.BlkToDatanodes[id], n.Addr2SID[args.Addr]) == false {
+			// BlkToDatanodes maps block id to storage id
+			n.BlkToDatanodes[id] = append(n.BlkToDatanodes[id], n.Addr2SID[args.Addr])
+		}
 	}
 	reply.Status = true
 	return nil
+}
+
+func contains(list []string, elem string) bool {
+	for _, e := range list {
+		if e == elem {
+			return true 
+		}
+	}
+	return false 
 }
