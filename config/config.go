@@ -55,8 +55,10 @@ var (
 )
 
 const (
+	// CalMeanVar calculates mean and variance 
+	CalMeanVar = iota
 	// Cat for command type
-	Cat = iota
+	Cat
 	// CopyFromLocal is type number for copyFromLocal command
 	CopyFromLocal
 	// CopyToLocal is type number for copyToLocal command

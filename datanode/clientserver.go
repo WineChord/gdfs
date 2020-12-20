@@ -15,6 +15,7 @@
 package datanode
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -29,6 +30,34 @@ import (
 
 	"github.com/WineChord/gdfs/utils"
 )
+
+// CalMeanVarMap calculates mean and variance for this segment
+func (d *DataNode) CalMeanVarMap(args *utils.CalMVArgs, reply *utils.CalMVReply) error {
+	blkID := args.BlkID
+	log.Printf("enter CalMeanVarMap\n")
+	file, err := os.Open(filepath.Join(d.ActPath, blkID))
+	defer file.Close()
+	if err != nil {
+		log.Printf("error when opening actual data file: %v\n", err)
+	}
+	s := bufio.NewScanner(file)
+	cnt, tot, sq := int64(0), float64(0), float64(0)
+	for s.Scan() {
+		n, err := strconv.Atoi(s.Text())
+		if err == nil {
+			cnt++
+			tot += float64(n)
+			sq += float64(n) * float64(n)
+			log.Printf("got NamespaceID from disk: %v\n", d.NamespaceID)
+		}
+	}
+	reply.Cnt = cnt
+	reply.Mean = tot / float64(cnt)
+	reply.MeanSQ = sq / float64(cnt)
+	log.Printf("%v cnt: %v, mean: %v, meansq: %v\n", blkID, reply.Cnt, reply.Mean,
+		reply.MeanSQ)
+	return nil
+}
 
 // RequestBlkArgs is used by client to request a block
 type RequestBlkArgs struct {

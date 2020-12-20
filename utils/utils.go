@@ -19,6 +19,18 @@ import (
 	"time"
 )
 
+// CalMVArgs is argument for calculating mean and avriance
+type CalMVArgs struct {
+	BlkID string
+}
+
+// CalMVReply is result for each subtask
+type CalMVReply struct {
+	Cnt    int64
+	Mean   float64
+	MeanSQ float64 // (\sum x^2)/n
+}
+
 // MetaData stores checksum and timestamp of a file
 type MetaData struct {
 	Checksum  uint32 // crc checksum

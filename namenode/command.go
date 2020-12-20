@@ -21,9 +21,11 @@ import (
 	"io/ioutil"
 	"log"
 	"math/rand"
+	"net/rpc"
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/WineChord/gdfs/config"
@@ -51,6 +53,8 @@ type CommandReply struct {
 func (n *NameNode) RunCommand(args *CommandArgs, reply *CommandReply) error {
 	log.Printf("inside RunCommand\n")
 	switch args.CommandType {
+	case config.CalMeanVar:
+		return n.runCalMeanVar(args, reply)
 	case config.Cat:
 		return n.runCat(args, reply)
 	case config.CopyFromLocal:
@@ -74,6 +78,75 @@ func (n *NameNode) RunCommand(args *CommandArgs, reply *CommandReply) error {
 	default:
 		return errors.New("Unsupport command type")
 	}
+}
+
+func (n *NameNode) runCalMeanVar(args *CommandArgs, reply *CommandReply) error {
+	log.Printf("inside runCalMeanVar\n")
+	// path := n.makePath(args.DPath) // meta/gdfs/perline.txt
+	blkList := n.readDfsFile(args.DPath)
+	/** In order to calculate the mean and variance, we need map and reduce
+	 * tasks. For map tasks, each segment gets calculated by the datanode holding
+	 * that segment. The results are count, mean, and mean square for each segment.
+	 * This will result in three files for each segment (count/mean/meansq)
+	 * Then we start two reduce tasks:
+	 * 	1. read every count and mean files to calculate MEAN (mean of total) and MEAN^2
+	 *  2. read every count and meansq files to calculate MEANSQ (mean square of total)
+	 * finally we can get variance by MEANSQ - MEAN^2
+	 * */
+	// Now we've got list of segments to process
+	totCnt := int64(0)
+	totMean := float64(0)
+	totSQ := float64(0)
+	var mu sync.Mutex
+	finished := 0
+	cond := sync.NewCond(&mu)
+	for _, blk := range blkList {
+		nodes := n.BlkToDatanodes[blk]
+		go func(s string, ns []string) {
+			for _, nd := range ns {
+				if nd == "" {
+					continue
+				}
+				reply, ok := n.reqCalMeanVar(s, n.SID2Addr[nd])
+				if ok {
+					log.Printf("map result for %v: %v\n", s, reply)
+					totCnt += reply.Cnt
+					totMean += reply.Mean * float64(reply.Cnt)
+					totSQ += reply.MeanSQ * float64(reply.Cnt)
+					break
+				}
+			}
+			finished++
+			cond.Broadcast()
+		}(blk, nodes)
+	}
+	mu.Lock()
+	for finished != len(blkList) {
+		cond.Wait()
+		log.Printf("calMeanVar map done %v\n", finished)
+	}
+	mu.Unlock()
+	totMean /= float64(totCnt)
+	totSQ /= float64(totCnt)
+	variance := totSQ - totMean*totMean
+	reply.Result = fmt.Sprintf("mean: %v, variance: %v\n", totMean, variance)
+	return nil
+}
+
+func (n *NameNode) reqCalMeanVar(blk string, addr string) (utils.CalMVReply, bool) {
+	args := utils.CalMVArgs{}
+	args.BlkID = blk
+	reply := utils.CalMVReply{}
+	c, err := rpc.DialHTTP("tcp", addr)
+	log.Printf("request calMeanVar for %v from %v\n", blk, addr)
+	if err != nil {
+		log.Fatal("dialing: ", err)
+	}
+	err = c.Call("DataNode.CalMeanVarMap", &args, &reply)
+	if err != nil {
+		log.Fatal("Calling: ", err)
+	}
+	return reply, true
 }
 
 func (n *NameNode) runCat(args *CommandArgs, reply *CommandReply) error {

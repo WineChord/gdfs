@@ -33,6 +33,7 @@ var c *rpc.Client
 func printHelp() {
 	fmt.Printf("Usage:\n")
 	fmt.Printf("\t-appendToFile <localsrc> ... <dst>\n")
+	fmt.Printf("\t-calMeanVar <dst>\n")
 	fmt.Printf("\t-cat <src>\n")
 	fmt.Printf("\t-checksum <src> ...\n")
 	fmt.Printf("\t-copyFromLocal <localsrc> <dst>\n")
@@ -51,6 +52,27 @@ func printHelp() {
 	fmt.Printf("\t-tail <file>\n")
 	fmt.Printf("\t-touch <path> ...\n")
 	fmt.Printf("\t-usage [cmd ...]\n")
+}
+
+func runCalMeanVar() {
+	start := utils.GetCurrentTimeInMs()
+	log.Printf("runCalMean\n")
+	if len(os.Args) != 3 {
+		log.Fatalf("calMean expects 1 argument <dst>, got %v\n",
+			len(os.Args)-2)
+	}
+	dfsPath := os.Args[2]
+	args := namenode.CommandArgs{}
+	args.CommandType = config.CalMeanVar
+	args.DPath = dfsPath
+	reply := namenode.CommandReply{}
+	log.Printf("called with args: %v\n", args)
+	err := c.Call("NameNode.RunCommand", &args, &reply)
+	if err != nil {
+		log.Fatal("Calling: ", err)
+	}
+	log.Printf("result returned from server: %v\n", reply.Result)
+	log.Printf("time elapsed: %v ms\n", utils.GetCurrentTimeInMs() - start)
 }
 
 func runCat() {
@@ -356,6 +378,8 @@ func main() {
 	}
 	defer c.Close()
 	switch os.Args[1] {
+	case "-calMeanVar":
+		runCalMeanVar()
 	case "-cat":
 		runCat()
 	case "-copyFromLocal":

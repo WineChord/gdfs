@@ -12,34 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package namenode
+package main
 
 import (
-	"time"
+	"bufio"
+	"fmt"
+	"os"
+	"strconv"
+
+	"github.com/WineChord/gdfs/utils"
 )
 
-// INodeType represents type of inode
-type INodeType int
-
-const (
-	// Dir for directory type
-	Dir INodeType = iota
-	// File for normal file type
-	File
-)
-
-type inode struct {
-	inodeTyep INodeType
-
-	// file properties
-	sizeInKB uint64   // only file type has size and fileBlks
-	fileBlks []string // file block list
-	// dir properties
-	children []*inode // only for directory
-
-	// common
-	name         string
-	permission   uint32
-	modification bool
-	accessTime   time.Time
+func main() {
+	start := utils.GetCurrentTimeInMs()
+	file, _ := os.Open("perline.txt")
+	s := bufio.NewScanner(file)
+	cnt := int64(0)
+	tot := int64(0)
+	sq := float64(0)
+	for s.Scan() {
+		n, _ := strconv.Atoi(s.Text())
+		cnt++
+		tot += int64(n)
+		sq += float64(n) * float64(n)
+	}
+	mean := float64(tot) / float64(cnt)
+	fmt.Printf("mean: %v, var: %v\n", mean, sq/float64(cnt)-mean*mean)
+	fmt.Printf("time elapsed: %v ms\n", utils.GetCurrentTimeInMs()-start)
 }
