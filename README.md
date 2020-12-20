@@ -4,7 +4,7 @@
 # gDFS
 gDFS is a distributed file system in Go.
 
-# Getting Started 
+## Getting Started 
 
 * Download Go 1.15
 
