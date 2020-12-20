@@ -171,9 +171,39 @@ func generateSegName(filename string, index int) string {
 }
 
 func (n *NameNode) runCopyToLocal(args *CommandArgs, reply *CommandReply) error {
-	//
 	log.Printf("inside runCopyToLocal\n")
+	/** called by client, the crucial argument is dfs path
+	 * namenode will retrieve [segment files] from that file (json format)
+	 * and the construct a map from segment file -> [datanods]
+	 * */
+	dfsPath := args.DPath
+	reply.BlkList = n.readDfsFile(dfsPath)
+	reply.BlkToDataNodes = make(map[string][]string)
+	for _, blk := range reply.BlkList {
+		reply.BlkToDataNodes[blk] = make([]string, len(n.BlkToDatanodes[blk]))
+		for _, sid := range n.BlkToDatanodes[blk] {
+			reply.BlkToDataNodes[blk] = append(reply.BlkToDataNodes[blk], n.SID2Addr[sid])
+		}
+	}
 	return nil
+}
+
+func (n *NameNode) readDfsFile(dfsPath string) []string {
+	log.Printf("read dfs file %v\n", dfsPath)
+	path := n.makePath(dfsPath) // meta/gdfs/mytext.txt
+	log.Printf("read dfs actual path: %v\n", path)
+	file, err := os.Open(path)
+	if err != nil {
+		log.Printf("error when opening dfs file: %v\n", err)
+	}
+	var res []string
+	bytes, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.Printf("error reading dfs file: %v\n", err)
+	}
+	json.Unmarshal(bytes, &res)
+	log.Printf("reading dfs file seg list: %v\n", res)
+	return res
 }
 
 func (n *NameNode) runLs(args *CommandArgs, reply *CommandReply) error {

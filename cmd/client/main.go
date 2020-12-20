@@ -156,6 +156,33 @@ func notifyNameNode() {
 
 func runCopyToLocal() {
 	log.Printf("enter runCopyToLocal\n")
+	if len(os.Args) != 4 {
+		log.Fatalf("copyToLocal expects 2 arguments <dst> <localsrc>, got %v\n",
+			len(os.Args)-2)
+	}
+	/** copyToLocal will first send request to namenode with dfsPath
+	 * namenode stores
+	 * 	1. dfsPath -> [segmentFiles] mapping
+	 *  2. segmentFiles -> [datanodes] mapping
+	 * we retrieve [segmentFiles] of this file and [datanotes] for
+	 * each segment.
+	 * we request each segment on the list of datanodee and append
+	 * each segment to local disk.
+	 * */
+	dfsPath := os.Args[2]
+	args := namenode.CommandArgs{}
+	args.CommandType = config.CopyToLocal
+	args.DPath = dfsPath // '/'
+	reply := namenode.CommandReply{}
+	log.Printf("called with args: %v\n", args)
+	err := c.Call("NameNode.RunCommand", &args, &reply)
+	if err != nil {
+		log.Fatal("Calling: ", err)
+	}
+	log.Printf("retrieve dfs file segments and datanodes:\n")
+	for _, seg := range reply.BlkList {
+		log.Printf("%v: %v\n", seg, reply.BlkToDataNodes[seg])
+	}
 }
 
 func runLs() {
