@@ -15,12 +15,18 @@
 package namenode
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
+	"path/filepath"
+	"strconv"
 
 	"github.com/WineChord/gdfs/config"
+	"github.com/WineChord/gdfs/utils"
 )
 
 // CommandArgs stores command argument for RPC
@@ -76,9 +82,8 @@ func (n *NameNode) runCat(args *CommandArgs, reply *CommandReply) error {
 }
 
 func (n *NameNode) runCopyFromLocal(args *CommandArgs, reply *CommandReply) error {
-	//
 	log.Printf("inside runCopyFromLocal\n")
-	path := n.makePath(args.DPath)
+	path := n.makePath(args.DPath) // meta/gdfs/
 	fileinfo, err := os.Stat(path)
 	if err != nil {
 		return err
@@ -86,11 +91,81 @@ func (n *NameNode) runCopyFromLocal(args *CommandArgs, reply *CommandReply) erro
 	if fileinfo.IsDir() == false {
 		return errors.New("The destination of copyFromLocal should be a directory")
 	}
-	fileinfo, err = os.Stat(path + string(os.PathSeparator) + args.FileName)
+	distFilePath := filepath.Join(path, args.FileName)
+	// distFilePath := path + string(os.PathSeparator) + args.FileName // meta/gdfs//
+	log.Printf("local file name: %v\n", args.FileName)
+	log.Printf("distFilePath: %v\n", distFilePath)
+	fileinfo, err = os.Stat(distFilePath)
 	if err == nil && fileinfo.IsDir() == false {
 		return errors.New("File exists")
 	}
+	/** Should divide files into segments, segment size see configuration (e.g. 4KB)
+	 * We maintain a file -> list of segments map
+	 * each segment's name is of format:
+	 * 	originalFileName-timestamp-random-00000000  (8 numbers, configurable)
+	 * 	originalFileName-timestamp-random-00000001
+	 *   ...
+	 * for each segment, we randomly select R (replica number) nodes to store
+	 * the segment. the nodes is stored as address(ip:port) for convenience.
+	 * Therefore, each segment has a list:
+	 *     [addr1, addr2, addr3]
+	 * Overall, it looks like:
+	 * 	  segmentFileName0: [addr1, addr2, addr3]
+	 *    segmentFileName1: [arrr3, addr4, addr2]
+	 *    ...
+	 * this map is returned back to client.
+	 * That is, we will not split data here, the namenode will only calculate
+	 * how each segment is placed on datanodes. It will not try to do the actual
+	 * data split and it will not send any data segments directly to datanode.
+	 * Therefore, the only crucial thing in argument from client is FileSize.
+	 * */
+	numBlks := int((args.FileSize-1)/int64(config.BlkSize) + 1)
+	reply.BlkToDataNodes = make(map[string][]string)
+	reply.BlkList = make([]string, 0)
+	log.Printf("number of blocks: %v, totalsize: %v, block size: %v\n", numBlks,
+		args.FileSize, config.BlkSize)
+	log.Printf("current nodes available: %v\n", len(n.Addr2SID)) 
+	log.Printf("%v\n", n.Addr2SID)
+	for i := 0; i < numBlks; i++ {
+		segmentName := generateSegName(args.FileName, i)
+		// reply.BlkList is needed because we need an orded list of segment
+		// file names. The map itself is unordered.
+		reply.BlkList = append(reply.BlkList, segmentName)
+		nodeList := make([]string, 0)
+		for addr := range n.Addr2SID {
+			// because map is random in Go, therefore we directly use for to
+			// generate 3 random nodes
+			if len(nodeList) >= config.ReplicationFactor {
+				break
+			}
+			nodeList = append(nodeList, addr)
+		}
+		reply.BlkToDataNodes[segmentName] = nodeList
+		log.Printf("%v seg: %v, list: %v\n", args.FileName, segmentName, nodeList)
+	}
+	// here namenode should not update its BlkToDatanodes map, since data hasn't
+	// been stored on datanode yet. the information will be updated when datanode
+	// has stored the replica.
+	// However, it will store the file->blocks map on disk
+	// file->blocks will be stored as json files on disk
+	file, err := os.Create(distFilePath)
+	if err != nil {
+		log.Printf("error when creating dist file: %v\n", err)
+	}
+	bytes, err := json.Marshal(reply.BlkList)
+	_, err = file.Write(bytes)
+	if err != nil {
+		log.Printf("error when writing seg names to json file: %v\n", err)
+	}
+	file.Sync()
+	file.Close()
 	return nil
+}
+
+func generateSegName(filename string, index int) string {
+	timestamp := strconv.Itoa(int(utils.GetCurrentTimeInMs()))
+	random := strconv.Itoa(rand.Int())
+	return filename + "-" + timestamp + "-" + random + "-" + fmt.Sprintf("%08d", index)
 }
 
 func (n *NameNode) runCopyToLocal(args *CommandArgs, reply *CommandReply) error {
@@ -179,5 +254,5 @@ func (n *NameNode) runFormat(args *CommandArgs, reply *CommandReply) error {
 }
 
 func (n *NameNode) makePath(path string) string {
-	return n.DFSRootPath + string(os.PathSeparator) + path
+	return filepath.Join(n.DFSRootPath, path)
 }

@@ -59,6 +59,7 @@ func runCopyFromLocal() {
 		log.Fatalf("copyFromLocal expects 2 arguments <localsrc> <dst>, got %v\n",
 			len(os.Args)-2)
 	}
+	// name.txt, /
 	localPath, dfsPath := os.Args[2], os.Args[3]
 	fileinfo, err := os.Stat(localPath)
 	if err != nil {
@@ -67,15 +68,19 @@ func runCopyFromLocal() {
 	fileSize := fileinfo.Size() // size in byte
 	args := namenode.CommandArgs{}
 	args.CommandType = config.CopyFromLocal
-	args.DPath = dfsPath
+	args.DPath = dfsPath // '/'
 	args.FileSize = fileSize
-	reply := namenode.CommandReply{} 
+	args.FileName = fileinfo.Name()
+	reply := namenode.CommandReply{}
+	log.Printf("called with args: %v\n", args)
 	err = c.Call("NameNode.RunCommand", &args, &reply)
 	if err != nil {
 		log.Fatal("Calling: ", err)
 	}
-	
-
+	log.Printf("reply from server (segment name: [list of nodes]):\n")
+	for _, seg := range reply.BlkList {
+		log.Printf("%v: %v\n", seg, reply.BlkToDataNodes[seg])
+	}
 }
 
 func runCopyToLocal() {

@@ -32,6 +32,7 @@ import (
 // block to datanodes map is non-persistent,
 // it is gathered by receiving reports from datanodes
 type NameNode struct {
+	// meta/gdfs
 	DFSRootPath string
 	// maps to storage id rather that address
 	BlkToDatanodes map[string][]string

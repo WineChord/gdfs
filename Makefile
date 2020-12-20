@@ -47,9 +47,9 @@ CURDIR := $(shell pwd)
 export PATH := $(CURDIR)/bin/:$(PATH) 
 
 # Targets 
-.PHONY: clean test dev datanode namenode
+.PHONY: clean test dev datanode namenode client
 
-default: namenode datanode 
+default: namenode datanode client
 
 dev: default test 
 
@@ -61,6 +61,9 @@ test:
 snamenode:
 	@echo "Starting namenode"
 	bin/namenode
+
+client:
+	$(GOBUILD) -o bin/client cmd/client/main.go 
 
 datanode:
 	$(GOBUILD) -o bin/datanode cmd/datanode/main.go 

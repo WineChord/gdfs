@@ -47,7 +47,7 @@ var (
 	// ReplicationFactor specifies number of replicas for each block
 	ReplicationFactor = 3
 	// BlkSize in byte
-	BlkSize = 4096
+	BlkSize = 4096 // 4KB
 	// HeartBeatInSec is the frequency of datanode notifies namenode
 	HeartBeatInSec = 3
 	// BlkReportInSec is the frequency of datanode reporting to namenode
