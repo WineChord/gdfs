@@ -19,7 +19,7 @@ $ cd gdfs
 
 ```shell
 $ make # this will build namenode, datanode, client 
-$ make snamenode # this start the namenode 
+$ make snamenode # this will start the namenode 
 ```
 
 * inside another terminal,
