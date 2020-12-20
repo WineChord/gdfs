@@ -16,6 +16,9 @@ package datanode
 
 import (
 	"bufio"
+	"encoding/gob"
+	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/rpc"
@@ -35,6 +38,8 @@ import (
 // IDList is restored as IDToMetaData.keys()
 type DataNode struct {
 	DataPath string
+	MetaPath string
+	ActPath  string
 	// Assigned after each format.
 	// When DataNode first starts, it will perform a
 	// handshake with NameNode. During this process
@@ -74,13 +79,7 @@ type DataNode struct {
 	 *    its heartbeat for a very long time. (10 mins in paper)
 	 */
 	// IDList       []string
-	// IDToMetaData map[string]MetaData
-}
-
-// MetaData stores checksum and timestamp of a file
-type MetaData struct {
-	Checksum  uint32 // crc checksum
-	Timestamp int64  // timestamp in millisecond
+	IDToMetaData map[string]utils.MetaData
 }
 
 // NewDataNode retrieve NamespaceID and StorageID on disk
@@ -93,6 +92,7 @@ func NewDataNode() *DataNode {
 
 func (d *DataNode) init() {
 	log.Printf("start initializing datanode...\n")
+	gob.Register(utils.MetaData{})
 	d.DataPath = config.DataPath
 	ex, err := utils.Exists(d.DataPath)
 	if err != nil {
@@ -108,10 +108,63 @@ func (d *DataNode) init() {
 		d.tryReadNamespaceID()
 		d.tryReadStorageID()
 	}
+	d.constructInfo() // construct IDToMetaData map using local disk files
 	d.getAddress()
 	log.Printf("datanode %v is successfully initialized\n", d.HostName)
 	log.Printf("addr: %v, datapath: %v, nid: %v, sid: %v", d.Addr, d.DataPath,
 		d.NamespaceID, d.StorageID)
+}
+
+func (d *DataNode) constructInfo() {
+	d.MetaPath = config.IDToMetaDataPath
+	d.ActPath = config.ActualDataPath
+	ex, err := utils.Exists(d.MetaPath)
+	if err != nil {
+		log.Printf("error with metadata path: %v\n", err)
+	}
+	if !ex {
+		log.Printf("create metadata path %v\n", d.MetaPath)
+		os.MkdirAll(d.MetaPath, 0700)
+	} else {
+		// dir exists, try to read IDToMetaData map
+		files, err := ioutil.ReadDir(d.MetaPath)
+		if err != nil {
+			log.Printf("error when reading dir %v: %v", d.MetaPath, err)
+		}
+		for _, file := range files {
+			d.readJSON(file)
+		}
+	}
+	ex, err = utils.Exists(d.ActPath)
+	if err != nil {
+		log.Printf("error with actual data path: %v\n", err)
+	}
+	if !ex {
+		log.Printf("create actual data path %v\n", d.ActPath)
+		os.MkdirAll(d.ActPath, 0700)
+	} else {
+		// actual data path exists, should check whether it
+		// matches with metadata information TODO
+	}
+}
+
+func (d *DataNode) readJSON(file os.FileInfo) {
+	// the struct MetaData is store in json format in file
+	filename := d.MetaPath + string(os.PathSeparator) + file.Name()
+	jsonFile, err := os.Open(filename)
+	if err != nil {
+		log.Printf("error when opening %v: %v\n", filename, err)
+	}
+	defer jsonFile.Close()
+	byteValue, err := ioutil.ReadAll(jsonFile)
+	if err != nil {
+		log.Printf("error when reading %v: %v\n", filename, err)
+	}
+	var metadata utils.MetaData
+	json.Unmarshal(byteValue, &metadata)
+	d.IDToMetaData[file.Name()] = metadata // store metadata
+	log.Printf("load metadata from %v: , checksum: %v, timestamp: %v, len: %v\n",
+		file.Name(), metadata.Checksum, metadata.Timestamp, metadata.Length)
 }
 
 func (d *DataNode) getAddress() {
@@ -279,6 +332,33 @@ func (d *DataNode) sendHeartBeat() {
 		reply.ReRegister, reply.Shutdown, reply.ReqBlkReport)
 }
 
+func (d *DataNode) reportBlock() {
+	// datanode does the first block report after registration
+	// with namenode, then it will do block report hourly (in paper)
+	// Here we set the report time to be every 1 minuate.
+	// During the block report, datanode will send the following
+	// information to namenode:
+	//  For each block on current datanode:
+	//    1. Block id (string)
+	//    2. Timestamp (string)
+	//    3. Block length (int64)
+	log.Printf("report blocks to namenode, length: %v\n", len(d.IDToMetaData))
+	args := namenode.ReportBlockArgs{}
+	args.HostName = d.HostName
+	args.Addr = d.Addr
+	args.IDToMetaData = d.IDToMetaData
+	reply := namenode.ReportBlockReply{}
+	c, err := rpc.DialHTTP("tcp", config.NameNodeAddress)
+	if err != nil {
+		log.Fatal("dialing: ", err)
+	}
+	err = c.Call("NameNode.ReportBlock", &args, &reply)
+	if err != nil {
+		log.Fatal("Calling: ", err)
+	}
+	log.Printf("report blocks status: %v\n", reply.Status)
+}
+
 // Run first perform handshake with NameNode,
 // then register with NameNode to get storage id
 func (d *DataNode) Run() {
@@ -286,8 +366,15 @@ func (d *DataNode) Run() {
 	// perform handshake with NameNode
 	d.handshakeWithNameNode()
 	d.registerWithNameNode()
+	d.reportBlock()
+	go d.reportPeriodically()
 	for {
 		d.sendHeartBeat()
 		time.Sleep(time.Second * time.Duration(config.HeartBeatInSec))
 	}
+}
+
+func (d *DataNode) reportPeriodically() {
+	time.Sleep(time.Second * time.Duration(config.BlkReportInSec))
+	d.reportBlock()
 }

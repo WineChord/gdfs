@@ -40,12 +40,18 @@ var (
 	NamespaceIDPath = DataPath + string(os.PathSeparator) + "nid"
 	// StorageIDPath specifies the path of storage id
 	StorageIDPath = DataPath + string(os.PathSeparator) + "sid"
+	// IDToMetaDataPath is the path for metadata on datanode
+	IDToMetaDataPath = DataPath + string(os.PathSeparator) + "id2meta"
+	// ActualDataPath is the path for actual data on datanode
+	ActualDataPath = DataPath + string(os.PathSeparator) + "actdata"
 	// ReplicationFactor specifies number of replicas for each block
 	ReplicationFactor = 3
 	// BlkSize in byte
 	BlkSize = 4096
 	// HeartBeatInSec is the frequency of datanode notifies namenode
 	HeartBeatInSec = 3
+	// BlkReportInSec is the frequency of datanode reporting to namenode
+	BlkReportInSec = 60
 )
 
 const (

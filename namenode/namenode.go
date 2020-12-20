@@ -32,7 +32,8 @@ import (
 // block to datanodes map is non-persistent,
 // it is gathered by receiving reports from datanodes
 type NameNode struct {
-	DFSRootPath    string
+	DFSRootPath string
+	// maps to storage id rather that address
 	BlkToDatanodes map[string][]string
 	diskSpaceQuote float32
 	NamespaceID    int

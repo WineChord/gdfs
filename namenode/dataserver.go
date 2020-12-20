@@ -149,3 +149,31 @@ func (n *NameNode) HeartBeat(args *HeartBeatArgs, reply *HeartBeatReply) error {
 	reply.ReqBlkReport = false
 	return nil
 }
+
+// ReportBlockArgs contains id to metadata information
+// map from datanode. metadata contains blockid(key), checksum,
+// timestamp and block length
+type ReportBlockArgs struct {
+	HostName     string
+	Addr         string
+	IDToMetaData map[string]utils.MetaData
+}
+
+// ReportBlockReply contains status: true or false
+type ReportBlockReply struct {
+	Status bool
+}
+
+// ReportBlock will update namenode's BlkToDatanodes
+func (n *NameNode) ReportBlock(args *ReportBlockArgs, reply *ReportBlockReply) error {
+	log.Printf("receive block report from %v of length: %v\n", args.HostName, len(args.IDToMetaData))
+	for id := range args.IDToMetaData {
+		if n.BlkToDatanodes[id] == nil {
+			n.BlkToDatanodes[id] = make([]string, 0)
+		}
+		// BlkToDatanodes maps block id to storage id
+		n.BlkToDatanodes[id] = append(n.BlkToDatanodes[id], n.Addr2SID[args.Addr])
+	}
+	reply.Status = true
+	return nil
+}

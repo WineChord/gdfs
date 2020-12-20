@@ -19,6 +19,13 @@ import (
 	"time"
 )
 
+// MetaData stores checksum and timestamp of a file
+type MetaData struct {
+	Checksum  uint32 // crc checksum
+	Timestamp int64  // timestamp in millisecond
+	Length    int64  // block length
+}
+
 // Exists checks whether a path exist
 func Exists(path string) (bool, error) {
 	_, err := os.Stat(path)
