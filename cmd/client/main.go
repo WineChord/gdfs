@@ -15,13 +15,17 @@
 package main
 
 import (
+	"encoding/gob"
 	"fmt"
+	"hash/crc32"
 	"log"
 	"net/rpc"
 	"os"
 
 	"github.com/WineChord/gdfs/config"
+	"github.com/WineChord/gdfs/datanode"
 	"github.com/WineChord/gdfs/namenode"
+	"github.com/WineChord/gdfs/utils"
 )
 
 var c *rpc.Client
@@ -80,6 +84,52 @@ func runCopyFromLocal() {
 	log.Printf("reply from server (segment name: [list of nodes]):\n")
 	for _, seg := range reply.BlkList {
 		log.Printf("%v: %v\n", seg, reply.BlkToDataNodes[seg])
+	}
+	/** Here we've got:
+	 * list of segment names: [segname0, segnamt1, ...]
+	 * seg to list of nodes:
+	 * 		segname0: [node0, node1, node2]
+	 * 		segname1: [node1, node3, node4]
+	 *  ...
+	 * Then the client will do the actual data splitting,
+	 * It will split the file data into segments of fixed length (e.g. 4KB).
+	 * For each segment, it will calculate its checksum, then send the
+	 * information below to the datanodes in list:
+	 * 		1. BlkID (string) format: filename-index-timestamp-random
+	 * 		2. BlockData ([]byte)
+	 * 		3. checksum (uint32)
+	 * */
+	// For each segment:
+	file, err := os.Open(localPath)
+	if err != nil {
+		log.Printf("error when opening local file of path %v: %v\n",
+			localPath, err)
+	}
+	for _, blkID := range reply.BlkList {
+		data := make([]byte, config.BlkSize)
+		n, err := file.Read(data)
+		if err != nil {
+			log.Printf("reading block %v in file %v: %v\n", blkID, localPath, err)
+		}
+		checksum := crc32.ChecksumIEEE(data)
+		// send [blkId, data, checksum] to each datanode
+		for _, addr := range reply.BlkToDataNodes[blkID] {
+			args1 := utils.BlkData{}
+			args1.BlkID = blkID
+			args1.Checksum = checksum
+			args1.Data = data
+			args1.Length = n
+			reply1 := datanode.SendBlkReply{}
+			c, err := rpc.DialHTTP("tcp", addr)
+			log.Printf("sending %v to %v\n", blkID, addr)
+			if err != nil {
+				log.Fatal("dialing: ", err)
+			}
+			err = c.Call("DataNode.SendBlk", &args1, &reply1)
+			if err != nil {
+				log.Fatal("Calling: ", err)
+			}
+		}
 	}
 }
 
@@ -175,6 +225,7 @@ func runFormat() {
 }
 
 func main() {
+	gob.Register(utils.BlkData{})
 	if len(os.Args) == 1 {
 		printHelp()
 	}

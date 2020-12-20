@@ -158,6 +158,7 @@ func (n *NameNode) format() {
 	}
 	w := bufio.NewWriter(f)
 	w.WriteString(strconv.Itoa(n.NamespaceID))
+	w.Flush()
 	log.Printf("NamespaceID changes to %v after formatting\n", n.NamespaceID)
 }
 

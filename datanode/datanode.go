@@ -94,6 +94,7 @@ func (d *DataNode) init() {
 	log.Printf("start initializing datanode...\n")
 	gob.Register(utils.MetaData{})
 	d.DataPath = config.DataPath
+	d.IDToMetaData = make(map[string]utils.MetaData)
 	ex, err := utils.Exists(d.DataPath)
 	if err != nil {
 		log.Printf("error with data node path: %v\n", err)
@@ -368,6 +369,7 @@ func (d *DataNode) Run() {
 	d.registerWithNameNode()
 	d.reportBlock()
 	go d.reportPeriodically()
+	go d.serveClients()
 	for {
 		d.sendHeartBeat()
 		time.Sleep(time.Second * time.Duration(config.HeartBeatInSec))

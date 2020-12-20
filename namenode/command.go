@@ -102,8 +102,8 @@ func (n *NameNode) runCopyFromLocal(args *CommandArgs, reply *CommandReply) erro
 	/** Should divide files into segments, segment size see configuration (e.g. 4KB)
 	 * We maintain a file -> list of segments map
 	 * each segment's name is of format:
-	 * 	originalFileName-timestamp-random-00000000  (8 numbers, configurable)
-	 * 	originalFileName-timestamp-random-00000001
+	 * 	originalFileName-00000000-timestamp-random  (8 numbers, configurable)
+	 * 	originalFileName-00000001-timestamp-random
 	 *   ...
 	 * for each segment, we randomly select R (replica number) nodes to store
 	 * the segment. the nodes is stored as address(ip:port) for convenience.
@@ -124,7 +124,7 @@ func (n *NameNode) runCopyFromLocal(args *CommandArgs, reply *CommandReply) erro
 	reply.BlkList = make([]string, 0)
 	log.Printf("number of blocks: %v, totalsize: %v, block size: %v\n", numBlks,
 		args.FileSize, config.BlkSize)
-	log.Printf("current nodes available: %v\n", len(n.Addr2SID)) 
+	log.Printf("current nodes available: %v\n", len(n.Addr2SID))
 	log.Printf("%v\n", n.Addr2SID)
 	for i := 0; i < numBlks; i++ {
 		segmentName := generateSegName(args.FileName, i)
@@ -165,7 +165,8 @@ func (n *NameNode) runCopyFromLocal(args *CommandArgs, reply *CommandReply) erro
 func generateSegName(filename string, index int) string {
 	timestamp := strconv.Itoa(int(utils.GetCurrentTimeInMs()))
 	random := strconv.Itoa(rand.Int())
-	return filename + "-" + timestamp + "-" + random + "-" + fmt.Sprintf("%08d", index)
+	// of format: filename-index-timestamp-random
+	return filename + "-" + fmt.Sprintf("%08d", index) + "-" + timestamp + "-" + random
 }
 
 func (n *NameNode) runCopyToLocal(args *CommandArgs, reply *CommandReply) error {

@@ -49,7 +49,7 @@ var (
 	// BlkSize in byte
 	BlkSize = 4096 // 4KB
 	// HeartBeatInSec is the frequency of datanode notifies namenode
-	HeartBeatInSec = 3
+	HeartBeatInSec = 60
 	// BlkReportInSec is the frequency of datanode reporting to namenode
 	BlkReportInSec = 60
 )

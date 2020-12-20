@@ -26,6 +26,14 @@ type MetaData struct {
 	Length    int64  // block length
 }
 
+// BlkData is used by client to send block data to datanodes
+type BlkData struct {
+	BlkID    string // of format filename-index-timestamp-random
+	Data     []byte // data in bytes
+	Checksum uint32 // checksum of data
+	Length   int
+}
+
 // Exists checks whether a path exist
 func Exists(path string) (bool, error) {
 	_, err := os.Stat(path)
